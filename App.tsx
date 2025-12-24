@@ -1,41 +1,49 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Category, Article } from './types';
+import { Article, DEFAULT_CATEGORIES } from './types';
 import { INITIAL_ARTICLES } from './constants';
 import Header from './components/Header';
 import ArticleCard from './components/ArticleCard';
 import FilterBar from './components/FilterBar';
 import AddLinkModal from './components/AddLinkModal';
-import AIAssistant from './components/AIAssistant';
 import AdminLoginModal from './components/AdminLoginModal';
-import { Plus, Sparkles, MessageSquare, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import CategoryManagerModal from './components/CategoryManagerModal';
+import { Plus, ShieldCheck, CheckCircle2, AlertCircle, ListPlus } from 'lucide-react';
 
-const STORAGE_KEY = 'wecurate_articles_db_v2';
+const STORAGE_KEY_ARTICLES = 'wecurate_articles_db_v3';
+const STORAGE_KEY_CATS = 'wecurate_categories_db_v3';
 
 const App: React.FC = () => {
+  // 分类状态
+  const [categories, setCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_CATS);
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+  });
+
+  // 文章状态
   const [articles, setArticles] = useState<Article[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY_ARTICLES);
     if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_ARTICLES;
-      }
+      try { return JSON.parse(saved); } catch (e) { return INITIAL_ARTICLES; }
     }
     return INITIAL_ARTICLES;
   });
 
-  const [selectedCategory, setSelectedCategory] = useState<Category | '全部'>('全部');
+  const [selectedCategory, setSelectedCategory] = useState<string>('全部');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(articles));
+    localStorage.setItem(STORAGE_KEY_ARTICLES, JSON.stringify(articles));
   }, [articles]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(categories));
+  }, [categories]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -60,10 +68,26 @@ const App: React.FC = () => {
   };
 
   const handleDeleteArticle = (id: string) => {
-    // 这里的 id 已经是 ArticleCard 传递过来的确认要删除的 id
-    const updatedArticles = articles.filter(article => article.id !== id);
-    setArticles(updatedArticles);
+    setArticles(articles.filter(article => article.id !== id));
     showToast('内容已从资料库移除');
+  };
+
+  const handleAddCategory = (newCat: string) => {
+    if (categories.includes(newCat)) return;
+    setCategories([...categories, newCat]);
+    showToast(`分类 "${newCat}" 已添加`);
+  };
+
+  const handleDeleteCategory = (catToDelete: string) => {
+    if (catToDelete === '其他') {
+      showToast('默认分类不可删除', 'error');
+      return;
+    }
+    setCategories(categories.filter(c => c !== catToDelete));
+    // 将被删除分类下的文章重置为“其他”
+    setArticles(articles.map(a => a.category === catToDelete ? { ...a, category: '其他' } : a));
+    if (selectedCategory === catToDelete) setSelectedCategory('全部');
+    showToast(`分类 "${catToDelete}" 已移除`);
   };
 
   return (
@@ -82,24 +106,33 @@ const App: React.FC = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex flex-col">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              {isAdmin ? <ShieldCheck className="w-5 h-5 text-amber-500" /> : <Sparkles className="w-5 h-5 text-indigo-500" />}
+              {isAdmin && <ShieldCheck className="w-5 h-5 text-amber-500" />}
               {isAdmin ? '内容管理系统' : '精选专业内容'}
             </h2>
-            {isAdmin && <p className="text-[10px] text-amber-600 font-medium">您现在拥有编辑与删除权限</p>}
           </div>
           
           {isAdmin && (
-            <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1 px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-700 transition-all hover:scale-105 shadow-lg shadow-indigo-200"
-            >
-              <Plus className="w-4 h-4" />
-              添加推荐
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setIsCatModalOpen(true)}
+                className="flex items-center gap-1 px-3 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all"
+              >
+                <ListPlus className="w-4 h-4" />
+                管理分类
+              </button>
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex items-center gap-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+              >
+                <Plus className="w-4 h-4" />
+                添加推荐
+              </button>
+            </div>
           )}
         </div>
 
         <FilterBar 
+          categories={categories}
           selected={selectedCategory} 
           onSelect={setSelectedCategory} 
         />
@@ -134,23 +167,19 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Floating Buttons */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-4">
-        <button 
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className="w-14 h-14 bg-white text-indigo-600 rounded-full flex items-center justify-center shadow-xl border border-indigo-50 hover:bg-indigo-50 transition-all group"
-        >
-          <MessageSquare className={`w-6 h-6 transition-transform ${isChatOpen ? 'rotate-90' : ''}`} />
-          <span className="absolute right-16 px-3 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">
-            AI 专家解答
-          </span>
-        </button>
-      </div>
-
       <AddLinkModal 
         isOpen={isAddModalOpen} 
+        categories={categories}
         onClose={() => setIsAddModalOpen(false)} 
         onAdd={handleAddArticle}
+      />
+
+      <CategoryManagerModal 
+        isOpen={isCatModalOpen}
+        categories={categories}
+        onClose={() => setIsCatModalOpen(false)}
+        onAdd={handleAddCategory}
+        onDelete={handleDeleteCategory}
       />
 
       <AdminLoginModal 
@@ -162,33 +191,24 @@ const App: React.FC = () => {
         }}
       />
 
-      <AIAssistant 
-        isOpen={isChatOpen} 
-        onClose={() => setIsChatOpen(false)}
-        articles={articles}
-      />
-
-      {/* Footer Navigation (Mobile) */}
+      {/* Mobile Footer */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-6 py-3 flex justify-around md:hidden z-40">
         <button className="flex flex-col items-center gap-1 text-indigo-600">
-          <Sparkles className="w-6 h-6" />
+          <Plus className="w-6 h-6" />
           <span className="text-[10px] font-medium">发现</span>
         </button>
-        {isAdmin ? (
-          <button onClick={() => setIsAddModalOpen(true)} className="flex flex-col items-center gap-1 text-indigo-600">
-            <Plus className="w-6 h-6" />
-            <span className="text-[10px] font-medium">添加</span>
-          </button>
-        ) : (
-          <button onClick={() => setIsAdminModalOpen(true)} className="flex flex-col items-center gap-1 text-slate-400">
-            <ShieldCheck className="w-6 h-6" />
-            <span className="text-[10px] font-medium">后台</span>
-          </button>
+        {isAdmin && (
+          <>
+            <button onClick={() => setIsCatModalOpen(true)} className="flex flex-col items-center gap-1 text-slate-400">
+              <ListPlus className="w-6 h-6" />
+              <span className="text-[10px] font-medium">分类</span>
+            </button>
+            <button onClick={() => setIsAddModalOpen(true)} className="flex flex-col items-center gap-1 text-indigo-600">
+              <Plus className="w-6 h-6" />
+              <span className="text-[10px] font-medium">添加</span>
+            </button>
+          </>
         )}
-        <button onClick={() => setIsChatOpen(true)} className="flex flex-col items-center gap-1 text-slate-400">
-          <MessageSquare className="w-6 h-6" />
-          <span className="text-[10px] font-medium">AI问答</span>
-        </button>
       </nav>
     </div>
   );

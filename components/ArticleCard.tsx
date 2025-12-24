@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Article } from '../types';
-import { CATEGORY_COLORS } from '../constants';
+import { getCategoryColor } from '../constants';
 import { ExternalLink, Tag, User, Trash2 } from 'lucide-react';
 
 interface ArticleCardProps {
@@ -11,13 +11,11 @@ interface ArticleCardProps {
 }
 
 const ArticleCard: React.FC<ArticleCardProps> = ({ article, onDelete, isAdmin }) => {
-  const colorClass = CATEGORY_COLORS[article.category];
+  const colorClass = getCategoryColor(article.category);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    // 按照用户要求，在此处添加确认对话框
     if (window.confirm('确定要从资料库中永久删除这篇文章吗？')) {
       onDelete();
     }
@@ -36,15 +34,13 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onDelete, isAdmin })
             rel="noopener noreferrer"
             className="text-slate-400 hover:text-indigo-600 transition-colors p-1 rounded-lg hover:bg-slate-50"
             onClick={(e) => e.stopPropagation()}
-            title="查看原文"
           >
             <ExternalLink className="w-4 h-4" />
           </a>
           {isAdmin && (
             <button 
               onClick={handleDeleteClick}
-              className="text-slate-300 hover:text-rose-500 transition-all p-1.5 rounded-lg hover:bg-rose-50 hover:scale-110"
-              title="删除此文章"
+              className="text-slate-300 hover:text-rose-500 transition-all p-1.5 rounded-lg hover:bg-rose-50"
             >
               <Trash2 className="w-4 h-4" />
             </button>
